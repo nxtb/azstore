@@ -86,6 +86,28 @@ class AzureQMessage {
   }
 }
 
+enum UriType {
+  blob,
+  queue,
+  table,
+}
+
+extension _Methods on UriType {
+  /// A direct key to the URL.
+  ///
+  /// Examples: https://docs.microsoft.com/en-us/azure/storage/common/storage-configure-connection-string support custom URIs.
+  String get endpointKey {
+    switch (this) {
+      case UriType.blob:
+        return 'BlobEndpoint';
+      case UriType.queue:
+        return 'QueueEndpoint';
+      case UriType.table:
+        return 'TableEndpoint';
+    }
+  }
+}
+
 /// Azure Storage Client
 class AzureStorage {
   late Map<String, String> config;
@@ -123,7 +145,13 @@ class AzureStorage {
     return config.toString();
   }
 
-  Uri uri({String path = '/', Map<String, String>? queryParameters}) {
+  Uri uri({
+    String path = '/',
+    Map<String, String>? queryParameters,
+
+    /// When specified, the URL will be constructed based on the default endpoint as specified by the service.
+    UriType? type,
+  }) {
     var scheme = config[defaultEndpointsProtocol] ?? 'https';
     var suffix = config[endpointSuffix] ?? 'core.windows.net';
     var name = config[accountName];
@@ -135,12 +163,19 @@ class AzureStorage {
             .queryParameters
     };
 
-    return Uri(
-      scheme: scheme,
-      host: '$name.blob.$suffix',
-      path: path,
-      queryParameters: qp,
-    );
+    if (type != null && config[type.endpointKey] != null) {
+      return Uri.parse(config[type.endpointKey]!).replace(
+        path: path,
+        queryParameters: qp,
+      );
+    } else {
+      return Uri(
+        scheme: scheme,
+        host: '$name.blob.$suffix',
+        path: path,
+        queryParameters: qp,
+      );
+    }
   }
 
   String _canonicalHeaders(Map<String, String> headers) {
@@ -369,13 +404,15 @@ class AzureStorage {
   /// Put Blob.
   ///
   /// `body` and `bodyBytes` are mutually exclusive and mandatory.
-  Future<void> putBlob(String path,
-      {String? body,
-      Uint8List? bodyBytes,
-      required String contentType,
-      BlobType type = BlobType.BlockBlob}) async {
+  Future<void> putBlob(
+    String path, {
+    String? body,
+    Uint8List? bodyBytes,
+    required String contentType,
+    BlobType type = BlobType.BlockBlob,
+  }) async {
     assert((bodyBytes == null) ^ (body == null));
-    var request = http.Request('PUT', uri(path: path));
+    var request = http.Request('PUT', uri(path: path, type: UriType.blob));
     request.headers['x-ms-blob-type'] =
         type.toString() == 'BlobType.AppendBlob' ? 'AppendBlob' : 'BlockBlob';
     request.headers['content-type'] = contentType;
@@ -417,10 +454,19 @@ class AzureStorage {
   }
 
   /// Append block to blob.
-  Future<void> appendBlock(String path,
-      {String? body, Uint8List? bodyBytes}) async {
+  Future<void> appendBlock(
+    String path, {
+    String? body,
+    Uint8List? bodyBytes,
+  }) async {
     var request = http.Request(
-        'PUT', uri(path: path, queryParameters: {'comp': 'appendblock'}));
+      'PUT',
+      uri(
+        path: path,
+        queryParameters: {'comp': 'appendblock'},
+        type: UriType.blob,
+      ),
+    );
     if (bodyBytes != null) {
       request.bodyBytes = bodyBytes;
     } else if (body != null) {
