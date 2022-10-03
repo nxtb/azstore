@@ -414,7 +414,7 @@ class AzureStorage {
     assert((bodyBytes == null) ^ (body == null));
     var request = http.Request('PUT', uri(path: path, type: UriType.blob));
     request.headers['x-ms-blob-type'] =
-        type.toString() == 'BlobType.AppendBlob' ? 'AppendBlob' : 'BlockBlob';
+        type == BlobType.appendBlob ? 'AppendBlob' : 'BlockBlob';
     request.headers['content-type'] = contentType;
     if (type == BlobType.blockBlob) {
       if (bodyBytes != null) {
@@ -444,7 +444,7 @@ class AzureStorage {
   }) async {
     var request = http.Request('DELETE', uri(path: path));
     request.headers['x-ms-blob-type'] =
-        type.toString() == 'BlobType.AppendBlob' ? 'AppendBlob' : 'BlockBlob';
+        type == BlobType.appendBlob ? 'AppendBlob' : 'BlockBlob';
     _sign(request);
     var res = await request.send();
     if (res.statusCode == 202) {
